@@ -1,0 +1,3 @@
+﻿  main.cpp
+C:\Users\karlp\Desktop\Study\Torrens\CAO107 Computer Organisation & Archictecture\Assessments\Assessment 2\Assessment 2_ MultiThreaded Loader Starting Template\MultiThreaded Loader\main.cpp(31,69): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+  MultiThreaded Loader.vcxproj -> C:\Users\karlp\Desktop\Study\Torrens\CAO107 Computer Organisation & Archictecture\Assessments\Assessment 2\Assessment 2_ MultiThreaded Loader Starting Template\x64\Debug\MultiThreaded Loader.exe
