@@ -101,33 +101,25 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 
 }
 
-
-
-void ImageLoad(int ImageNo)
+std::vector<HBITMAP> g_vecLoadedImages;
+void loadImage(std::wstring filePath)
 {
+	
+
+	HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, filePath.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+
+	bool loadFail = loadedImage == NULL;
+	if (loadFail)
+		throw "Unable to load image.";
+
 	g_lock.lock();
-	Image = (HBITMAP)LoadImageW(NULL, (LPCWSTR)g_vecImageFileNames[ImageNo].c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+	g_vecLoadedImages.push_back(loadedImage);
 	g_lock.unlock();
 }
 
-void Controller(HWND wnd, int ImageNo)
-{
-	g_lock.lock();
-	if (yPos > 0)
-		xPos = ((ImageNo - 8) * 100);
 
-	else
-		xPos = ImageNo * 100;
 
-	if (xPos >= _kuiWINDOWWIDTH)
-	{
-		yPos += 100;
-		xPos = 0;
-	}
-	wnd = CreateWindow(L"STATIC", NULL, WS_VISIBLE | WS_CHILD | SS_BITMAP, xPos, yPos, 0, 0, wnd, NULL, NULL, NULL);
-	g_lock.unlock();
-	SendMessageW(wnd, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)Image);
-}
+
 
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
@@ -173,28 +165,38 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 			{
 
 				
-
+				
 				//Write code here to create multiple threads to load image files in parallel
 				auto ImageLoadTimeStart = std::chrono::high_resolution_clock::now();
 
 				for (int i = 0; i < g_vecImageFileNames.size(); i++)
 				{
-					threads.push_back(std::thread(ImageLoad, i));
-					Controller(_hwnd, i);
+					std::wstring imagePathName = g_vecImageFileNames[i];
+
+
+					threads.push_back(std::thread(loadImage,imagePathName));
+				}
+
+				for (int i = 0; i < threads.size(); i++)
+				{
+					if (threads[i].joinable())
+						threads[i].join();
 				}
 
 				for (int i = 0; i < g_vecImageFileNames.size(); i++)
-					if (threads[i].joinable())
-						threads[i].join();
-						
-					
-						
-				
+				{
+					HBITMAP loadedImage = g_vecLoadedImages[i];
 
-				
-					Controller(_hwnd, 0);
-					
-					
+					HDC hdc = GetDC(_hwnd);
+					HBRUSH brush = CreatePatternBrush(loadedImage);
+					RECT rect;
+					SetRect(&rect, 100* i, 0, 100 * i + 100, 100);
+					FillRect(hdc, &rect, brush);
+					DeleteObject(brush);
+					ReleaseDC(_hwnd, hdc);
+				}
+
+
 				auto ImageLoadTimeStop = std::chrono::high_resolution_clock::now();
 				auto ImageLoadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(ImageLoadTimeStop - ImageLoadTimeStart);
 
