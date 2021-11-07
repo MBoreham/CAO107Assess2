@@ -1,3 +1,4 @@
 ﻿  main.cpp
-C:\Users\karlp\Documents\GitHub Repositories\CAO107Assess2\Assessment 2_ MultiThreaded Loader Starting Template\MultiThreaded Loader\main.cpp(31,69): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\karlp\Documents\GitHub Repositories\CAO107Assess2\Assessment 2_ MultiThreaded Loader Starting Template\MultiThreaded Loader\main.cpp(199,64): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
+C:\Users\karlp\Documents\GitHub Repositories\CAO107Assess2\Assessment 2_ MultiThreaded Loader Starting Template\MultiThreaded Loader\main.cpp(200,121): warning C4267: '=': conversion from 'size_t' to 'int', possible loss of data
   MultiThreaded Loader.vcxproj -> C:\Users\karlp\Documents\GitHub Repositories\CAO107Assess2\Assessment 2_ MultiThreaded Loader Starting Template\x64\Debug\MultiThreaded Loader.exe

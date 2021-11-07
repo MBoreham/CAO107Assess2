@@ -1,4 +1,5 @@
 
+//-----LIBRARIES----------
 #include <Windows.h>
 #include <iostream>
 #include <vector>
@@ -6,60 +7,57 @@
 #include <chrono>
 #include <thread>
 #include <mutex>
+#include <fstream>
 #include "resource.h"
 
-using namespace std;
-
+//-----dEFINITIONS----------
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
 const unsigned int _kuiWINDOWWIDTH = 1200;
 const unsigned int _kuiWINDOWHEIGHT = 1200;
 #define MAX_FILES_TO_OPEN 50
 #define MAX_CHARACTERS_IN_FILENAME 25
 
-//Global Variables
-std::vector<std::wstring> g_vecImageFileNames;
-std::vector<std::wstring> g_vecSoundFileNames;
-HINSTANCE g_hInstance;
+//-----GLOBAL VARIABLES----------
 bool g_bIsFileLoaded = false;
 
-HBITMAP Image;
 LPCWSTR ImageLoadTime;
+LPCWSTR errorMessage;
+
 std::vector<std::thread> threads;
-int xPos, yPos;
+std::vector<HBITMAP> g_vecLoadedImages;
+std::vector<std::wstring> g_vecImageFileNames;
+
 std::mutex g_lock;
+
 int userDefinedThreadCount = 1;
-int threadStep = g_vecImageFileNames.size() / userDefinedThreadCount;
 
 
+// Function loads path names of images into a vector.
+// Returns TRUE or FALSE depending on successfull execution   
 bool ChooseImageFilesToLoad(HWND _hwnd)
 {
 	OPENFILENAME ofn;
-	SecureZeroMemory(&ofn, sizeof(OPENFILENAME)); // Better to use than ZeroMemory
-	wchar_t wsFileNames[MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH]; //The string to store all the filenames selected in one buffer togther with the complete path name.
+	SecureZeroMemory(&ofn, sizeof(OPENFILENAME)); 
+	wchar_t wsFileNames[MAX_FILES_TO_OPEN * MAX_CHARACTERS_IN_FILENAME + MAX_PATH];
 	wchar_t _wsPathName[MAX_PATH + 1];
-	wchar_t _wstempFile[MAX_PATH + MAX_CHARACTERS_IN_FILENAME]; //Assuming that the filename is not more than 20 characters
+	wchar_t _wstempFile[MAX_PATH + MAX_CHARACTERS_IN_FILENAME]; 
 	wchar_t _wsFileToOpen[MAX_PATH + MAX_CHARACTERS_IN_FILENAME];
 	ZeroMemory(wsFileNames, sizeof(wsFileNames));
 	ZeroMemory(_wsPathName, sizeof(_wsPathName));
 	ZeroMemory(_wstempFile, sizeof(_wstempFile));
 
-	//Fill out the fields of the structure
+	
 	ofn.lStructSize = sizeof(OPENFILENAME);
 	ofn.hwndOwner = _hwnd;
 	ofn.lpstrFile = wsFileNames;
-	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH;  //The size, in charactesr of the buffer pointed to by lpstrFile. The buffer must be atleast 256(MAX_PATH) characters long; otherwise GetOpenFileName and 
-													   //GetSaveFileName functions return False
-													   // Set lpstrFile[0] to '\0' so that GetOpenFileName does not 
-													   // use the contents of wsFileNames to initialize itself.
+	ofn.nMaxFile = MAX_FILES_TO_OPEN * 20 + MAX_PATH; 
 	ofn.lpstrFile[0] = '\0';
-	ofn.lpstrFilter = L"Bitmap Images(.bmp)\0*.bmp\0"; //Filter for bitmap images
+	ofn.lpstrFilter = L"Bitmap Images(.bmp)\0*.bmp\0"; 
 	ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_FILEMUSTEXIST | OFN_ALLOWMULTISELECT;
 
-	//If the user makes a selection from the  open dialog box, the API call returns a non-zero value
-	if (GetOpenFileName(&ofn) != 0) //user made a selection and pressed the OK button
+	
+	if (GetOpenFileName(&ofn) != 0) 
 	{
-		//Extract the path name from the wide string -  two ways of doing it
-		//First way: just work with wide char arrays
 		wcsncpy_s(_wsPathName, wsFileNames, ofn.nFileOffset);
 		int i = ofn.nFileOffset;
 		int j = 0;
@@ -88,25 +86,47 @@ bool ChooseImageFilesToLoad(HWND _hwnd)
 			{
 				i++;
 			}
-
 		}
 
 		g_bIsFileLoaded = true;
 		return true;
 	}
-	else // user pressed the cancel button or closed the dialog box or an error occured
+	else 
 	{
 		return false;
 	}
-
 }
 
-std::vector<HBITMAP> g_vecLoadedImages;
-void loadImage(std::wstring filePath)
+
+// Function takes the vector of image path names and a starting index and ending index.
+// Loops through a section of the vector of images determined by the start index and end index.
+// Uses a mutex lock to ensure that there are no conflicts between threads and type casts the result as a HBITMAP object.
+// Stores each HBITMAP object into a vector also protected by mutex locking.
+void loadImageRange(std::vector<std::wstring> files, int start, int end)
+{
+	for (int i = start; i < end; i++)
+	{
+		g_lock.lock();
+		HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, files[i].c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+		g_lock.unlock();
+
+		bool loadFail = loadedImage == NULL;
+		if (loadFail)
+			throw "Unable to load image.";
+
+		g_lock.lock();
+		g_vecLoadedImages.push_back(loadedImage);
+		g_lock.unlock();
+	}
+}
+
+// Loads a single image from the path given and stores it in a HBITMAP vector
+void loadImage(std::wstring file, int start, int end)
 {
 	
-
-	HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, filePath.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+	g_lock.lock();
+	HBITMAP loadedImage = (HBITMAP)LoadImageW(NULL, file.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+	g_lock.unlock();
 
 	bool loadFail = loadedImage == NULL;
 	if (loadFail)
@@ -115,11 +135,8 @@ void loadImage(std::wstring filePath)
 	g_lock.lock();
 	g_vecLoadedImages.push_back(loadedImage);
 	g_lock.unlock();
+	
 }
-
-
-
-
 
 LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lparam)
 {
@@ -147,7 +164,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	{
 
 		_hWindowDC = BeginPaint(_hwnd, &ps);
-		//Do all our painting here
 
 		EndPaint(_hwnd, &ps);
 		return (0);
@@ -158,32 +174,50 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 		switch (LOWORD(_wparam))
 		{
 
-
 		case ID_FILE_LOADIMAGE:
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
-
-				
-				
-				//Write code here to create multiple threads to load image files in parallel
+				// Set the start time
 				auto ImageLoadTimeStart = std::chrono::high_resolution_clock::now();
+				
+				int start, end, step;
 
-				for (int i = 0; i < g_vecImageFileNames.size(); i++)
+				// If there are more threads, or the same amount of threads defined than images, each image is threaded.
+				if (userDefinedThreadCount >= g_vecImageFileNames.size())
 				{
-					std::wstring imagePathName = g_vecImageFileNames[i];
-
-
-					threads.push_back(std::thread(loadImage,imagePathName));
+					for (int i = 0; i < g_vecImageFileNames.size(); i++)
+					{
+						threads.push_back(std::thread(loadImage, g_vecImageFileNames[i], start, end));
+					}
 				}
 
+				// If there are more images than threads, the images are dived into the defined amount of threads.
+				else
+				{
+					start = 0;
+					step = g_vecImageFileNames.size() / userDefinedThreadCount;
+					end = (g_vecImageFileNames.size() / userDefinedThreadCount) + (g_vecImageFileNames.size() % userDefinedThreadCount);
+
+					for (int i = 0; i < userDefinedThreadCount; i++)
+					{
+						threads.push_back(std::thread(loadImageRange, g_vecImageFileNames, start, end));
+
+						start = end;
+						end += step;
+					}
+				}
+					
+				// Returns the threads to the main function when they have completed execution
 				for (int i = 0; i < threads.size(); i++)
 				{
 					if (threads[i].joinable())
 						threads[i].join();
 				}
 
-				for (int i = 0; i < g_vecImageFileNames.size(); i++)
+				// *** THIS CODE WAS TAKEN FROM THE LESSON HELD BY JAMES KNIGHT ***
+				// Renders the images to the window
+				for (int i = 0; i < g_vecLoadedImages.size(); i++)
 				{
 					HBITMAP loadedImage = g_vecLoadedImages[i];
 
@@ -195,15 +229,17 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 					DeleteObject(brush);
 					ReleaseDC(_hwnd, hdc);
 				}
+				// *** THIS IS THE END OF THE CODE GIVEN BY JAMES KNIGHT ***
 
-
+				// Ends and calculates the time of the threading and outputs the time to the window
 				auto ImageLoadTimeStop = std::chrono::high_resolution_clock::now();
 				auto ImageLoadDuration = std::chrono::duration_cast<std::chrono::milliseconds>(ImageLoadTimeStop - ImageLoadTimeStart);
 
 				std::wstring Out = std::to_wstring(ImageLoadDuration.count());
 				Out += L" ms to load images. ";
 				ImageLoadTime = Out.c_str();
-				_hwnd = CreateWindow(L"STATIC", ImageLoadTime, WS_VISIBLE | WS_CHILD | WS_BORDER, 20, 200, 300, 25, _hwnd, NULL, NULL, NULL);
+				_hwnd = CreateWindow(L"STATIC", ImageLoadTime, WS_VISIBLE | WS_CHILD | WS_BORDER, 0, 0, 300, 25, _hwnd, NULL, NULL, NULL);
+				
 			}
 			else
 			{
@@ -235,7 +271,6 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	}
 	return (DefWindowProc(_hwnd, _uiMsg, _wparam, _lparam));
 }
-
 
 HWND CreateAndRegisterWindow(HINSTANCE _hInstance)
 {
@@ -281,42 +316,60 @@ HWND CreateAndRegisterWindow(HINSTANCE _hInstance)
 }
 
 
-
 int WINAPI WinMain(HINSTANCE _hInstance,
 	HINSTANCE _hPrevInstance,
 	LPSTR _lpCmdLine,
 	int _nCmdShow)
 {
+
 	MSG msg;  //Generic Message
 
 	HWND _hwnd = CreateAndRegisterWindow(_hInstance);
 
+	std::string line;
+
+	// Opening a file & retrieving its contents and converting from string to integer
+	std::fstream myFile;
+
+	myFile.open("inputFile.txt", std::fstream::in);
+
+	if (myFile.is_open())
+	{
+		getline(myFile, line);
+		userDefinedThreadCount = stoi(line);
+		myFile.close();
+	}
+	
+	if (userDefinedThreadCount < 1)
+	{
+		std::wstring OutMessage;
+		OutMessage += L" Error! Please input a number into the file greater than zero. ";
+		errorMessage = OutMessage.c_str();
+		_hwnd = CreateWindow(L"STATIC", errorMessage, WS_VISIBLE | WS_CHILD | WS_BORDER, 200, 200, 300, 100, _hwnd, NULL, NULL, NULL);
+	}
+	
 	if (!(_hwnd))
 	{
 		return (0);
 	}
 
-
-	// Enter main event loop
 	while (true)
 	{
-		// Test if there is a message in queue, if so get it.
+		
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			// Test if this is a quit.
+			
 			if (msg.message == WM_QUIT)
 			{
 				break;
 			}
 
-			// Translate any accelerator keys.
 			TranslateMessage(&msg);
-			// Send the message to the window proc.
+			
 			DispatchMessage(&msg);
 		}
 
 	}
 	
-	// Return to Windows like this...
 	return (static_cast<int>(msg.wParam));
 }
